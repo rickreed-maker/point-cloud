@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rotating 3D Point Cloud</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#080d18;color:#e9f1ff;font:14px system-ui,sans-serif;overflow:hidden}canvas{display:block;width:100vw;height:100vh;cursor:grab}canvas:active{cursor:grabbing}.panel{position:fixed;top:16px;left:16px;width:min(300px,calc(100vw - 32px));padding:17px 18px;background:#111c30e8;border:1px solid #34445c;border-radius:14px;backdrop-filter:blur(12px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;transition:opacity .2s ease,transform .2s ease;z-index:2}.panel.hidden{opacity:0;transform:translateY(-12px);pointer-events:none}h1{font-size:17px;margin:0 0 5px}.sub{color:#9cb1cb;font-size:12px;margin-bottom:16px}.control{display:flex;justify-content:space-between;align-items:center;margin:13px 0 5px}.value{color:#8fe7ff;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#65cfff}button{border:1px solid #4b6781;background:#1c344a;color:white;border-radius:7px;padding:8px 12px;cursor:pointer}button:hover{background:#284d67}.buttons{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}.status{font-size:12px;color:#8fe7ff;margin-top:10px;min-height:16px}button:disabled{opacity:.55;cursor:wait}select{max-width:175px;background:#1c344a;color:#fff;border:1px solid #4b6781;border-radius:7px;padding:7px;font:inherit}input[type=number]{width:85px;background:#1c344a;color:#fff;border:1px solid #4b6781;border-radius:7px;padding:7px;font:inherit}.hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);white-space:nowrap;color:#9cb1cb;font-size:12px;pointer-events:none}@media(max-width:520px){.panel{top:10px;left:10px;width:245px;padding:12px}.hint{font-size:11px}}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div class="panel" id="panel"><h1>3D Point Cloud</h1><div class="sub">Perspective projection · Y-axis rotation</div>
+<div class="control"><label for="structure">Point structure</label><select id="structure"><option value="sphere">Sphere</option><option value="shell">Sphere shell</option><option value="grid">Grid (XZ plane)</option></select></div>
+<div class="control"><label for="animatePoints">Vary positions over time</label><input id="animatePoints" type="checkbox" style="width:20px;height:20px;accent-color:#65cfff"></div>
+<div class="control"><label for="waveAmplitude">Wave height</label><span class="value" id="waveAmplitudeValue">0.35</span></div><input id="waveAmplitude" type="range" min="0" max="1.5" step="0.05" value="0.35">
+<div class="control"><label for="waveFrequency">Wave frequency</label><span class="value" id="waveFrequencyValue">3.0</span></div><input id="waveFrequency" type="range" min="0.5" max="10" step="0.1" value="3">
+<div class="control"><label for="waveSpeed">Wave speed</label><span class="value" id="waveSpeedValue">1.0</span></div><input id="waveSpeed" type="range" min="0" max="5" step="0.1" value="1">
+<div class="control"><label for="count">Points</label><span class="value" id="countValue"></span></div><input id="count" type="range" min="200" max="5000" step="100" value="1800">
+<div class="control"><label for="speed">Rotation speed</label><span class="value" id="speedValue"></span></div><input id="speed" type="range" min="-120" max="120" step="1" value="25">
+<div class="control"><label for="perspective">Perspective</label><span class="value" id="perspectiveValue"></span></div><input id="perspective" type="range" min="2" max="10" step="0.1" value="4.5">
+<div class="control"><label for="camera">Camera forward / back</label><span class="value" id="cameraValue"></span></div><input id="camera" type="range" min="-16" max="16" step="0.01" value="0">
+<div class="control"><label for="startDepth">Start depth</label><input id="startDepth" type="number" min="-16" max="16" step="0.1" value="-16"></div>
+<div class="control"><label for="endDepth">End depth</label><input id="endDepth" type="number" min="-16" max="16" step="0.1" value="16"></div>
+<div class="control"><label for="flySpeed">Fly speed</label><span class="value" id="flySpeedValue"></span></div><input id="flySpeed" type="range" min="-1.5" max="1.5" step="0.05" value="0">
+<div class="control"><label for="size">Point size</label><span class="value" id="sizeValue"></span></div><input id="size" type="range" min="0.5" max="4" step="0.1" value="1.7">
+<div class="control"><label for="format">YouTube video size</label><select id="format"><option value="shorts">Shorts · 1080 × 1920</option><option value="landscape">Standard · 1920 × 1080</option></select></div>
+<div class="control"><label for="duration">Video duration (seconds)</label><input id="duration" type="number" min="1" max="600" step="1" value="10"></div>
+<div class="buttons"><button id="toggle">Pause</button><button id="reset">Reset view</button><button id="regenerate">New cloud</button><button id="export">Export MP4</button><button id="exportWebm">Export WebM</button></div><div class="status" id="exportStatus" role="status" aria-live="polite"></div></div>
+<div class="hint">Tap to hide/show controls · Drag to orbit · Scroll to zoom · Camera + = forward</div>
+<script>
+(()=>{
+'use strict';
+const canvas=document.getElementById('scene'),ctx=canvas.getContext('2d',{alpha:false});
+const controls={};for(const id of ['count','speed','perspective','size','camera','flySpeed']){controls[id]=document.getElementById(id);const output=document.getElementById(id+'Value');const update=()=>output.textContent=id==='speed'?controls[id].value+'°/s':id==='count'?Number(controls[id].value).toLocaleString():id==='camera'||id==='flySpeed'?Number(controls[id].value).toFixed(2):controls[id].value;controls[id].addEventListener('input',update);update()}
+const startDepthInput=document.getElementById('startDepth'),endDepthInput=document.getElementById('endDepth');
+function getDepthBounds(){
+ const a=Math.max(-16,Math.min(16,Number(startDepthInput.value))),b=Math.max(-16,Math.min(16,Number(endDepthInput.value)));
+ return [Number.isFinite(a)?a:-16,Number.isFinite(b)?b:16];
+}
+function updateDepthBounds(changed){
+ let [a,b]=getDepthBounds();
+ if(a>b){if(changed==='start')b=a;else a=b;}
+ startDepthInput.value=a;endDepthInput.value=b;
+ cameraPosition=Math.max(a,Math.min(b,cameraPosition));
+ controls.camera.value=cameraPosition.toFixed(2);
+ document.getElementById('cameraValue').textContent=cameraPosition.toFixed(2);
+}
+startDepthInput.addEventListener('change',()=>updateDepthBounds('start'));
+endDepthInput.addEventListener('change',()=>updateDepthBounds('end'));
+const structureInput=document.getElementById('structure'),animatePointsInput=document.getElementById('animatePoints');
+for(const id of ['waveAmplitude','waveFrequency','waveSpeed']){const el=document.getElementById(id),out=document.getElementById(id+'Value');el.addEventListener('input',()=>out.textContent=Number(el.value).toFixed(id==='waveAmplitude'?2:1))}
+let waveTime=0;
+let points=[],yaw=0,pitch=-0.18,zoom=1,paused=false,width=0,height=0,dpr=1,last=0,cameraPosition=0;
+function makeCloud(){
+ points=[];const n=+controls.count.value;
+ if(structureInput.value==='grid'){
+   const side=Math.max(2,Math.round(Math.sqrt(n)));
+   for(let iz=0;iz<side;iz++)for(let ix=0;ix<side;ix++){
+     const x=(ix/(side-1)*2-1),z=(iz/(side-1)*2-1);
+     points.push({x,y:0,z,h:(ix+iz)/(2*(side-1))});
+   }
+ }else{
+   for(let i=0;i<n;i++){
+     const y=Math.random()*2-1,a=Math.random()*Math.PI*2,r=structureInput.value==='shell'?1:Math.cbrt(Math.random());
+     const s=Math.sqrt(1-y*y);
+     points.push({x:r*s*Math.cos(a),y:r*y,z:r*s*Math.sin(a),h:Math.random()});
+   }
+ }
+}
+structureInput.addEventListener('change',makeCloud);
+function resize(){dpr=Math.min(window.devicePixelRatio||1,2);width=innerWidth;height=innerHeight;canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0)}
+let recordingCanvas=null,recordingContext=null;
+function drawScene(target,w,h){
+target.fillStyle='#080d18';target.fillRect(0,0,w,h);
+const radius=Math.min(w*.38,h*.40)*zoom,dist=Number(controls.perspective.value),base=radius*dist*.85;
+const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+const projected=[];
+for(const p of points){
+ let py=p.y;
+ if(animatePointsInput.checked){
+   const amp=+document.getElementById('waveAmplitude').value;
+   const freq=+document.getElementById('waveFrequency').value;
+   if(structureInput.value==='grid')py+=amp*Math.sin(freq*p.x-waveTime)*Math.cos(freq*p.z-waveTime*.7);
+   else py+=amp*.28*Math.sin(freq*(p.x+p.z)+waveTime+p.h*3);
+ }
+ const x=p.x*cy+p.z*sy,z=-p.x*sy+p.z*cy;const y=py*cp-z*sp,depth=py*sp+z*cp;const distanceToPoint=dist-depth-cameraPosition;if(distanceToPoint<=0.08)continue;const scale=dist/distanceToPoint;projected.push({x:w/2+x*base*scale/dist,y:h/2+y*base*scale/dist,depth,scale,h:p.h})}
+projected.sort((a,b)=>a.depth-b.depth);
+for(const p of projected){const r=Math.max(.3,+controls.size.value*p.scale);const alpha=Math.min(.95,Math.max(.23,.58+p.depth*.27));target.beginPath();target.arc(p.x,p.y,r,0,Math.PI*2);target.fillStyle=`rgba(${Math.round(110+75*p.h)},${Math.round(190+55*p.h)},255,${alpha})`;target.fill()}
+}
+function render(t){const dt=Math.min((t-last)/1000||0,0.05);last=t;if(!paused){waveTime+=dt*Number(document.getElementById('waveSpeed').value);yaw+=Number(controls.speed.value)*Math.PI/180*dt;
+const fly=Number(controls.flySpeed.value);if(fly!==0){
+// Smoothly decelerate as the camera approaches the selected endpoint.
+const [startDepth,endDepth]=getDepthBounds();
+const limit=fly>0?endDepth:startDepth,remaining=Math.abs(limit-cameraPosition);
+const u=Math.max(0,Math.min(1,remaining/Math.min(1.5,Math.max(0.1,(endDepth-startDepth)/2))));
+const ease=u*u*(3-2*u);
+const step=Math.abs(fly)*dt*ease;
+cameraPosition=Math.max(startDepth,Math.min(endDepth,cameraPosition+Math.sign(fly)*step));
+if(remaining<0.005)cameraPosition=limit;
+controls.camera.value=cameraPosition.toFixed(2);document.getElementById('cameraValue').textContent=cameraPosition.toFixed(2)}}
+drawScene(ctx,width,height);
+if(recordingCanvas)drawScene(recordingContext,recordingCanvas.width,recordingCanvas.height);
+requestAnimationFrame(render)}
+let dragging=false,px=0,py=0,startX=0,startY=0,moved=false;
+const panel=document.getElementById('panel');
+function togglePanel(){panel.classList.toggle('hidden')}
+controls.camera.addEventListener('input',()=>{cameraPosition=Number(controls.camera.value)});
+canvas.addEventListener('pointerdown',e=>{dragging=true;px=startX=e.clientX;py=startY=e.clientY;moved=false;canvas.setPointerCapture(e.pointerId)});
+canvas.addEventListener('pointermove',e=>{if(!dragging)return;if(Math.hypot(e.clientX-startX,e.clientY-startY)>8)moved=true;if(!moved){px=e.clientX;py=e.clientY;return}yaw+=(e.clientX-px)*.007;pitch=Math.max(-Math.PI/2,Math.min(Math.PI/2,pitch+(e.clientY-py)*.007));px=e.clientX;py=e.clientY});
+canvas.addEventListener('pointerup',e=>{if(dragging&&!moved&&Math.hypot(e.clientX-startX,e.clientY-startY)<=8)togglePanel();dragging=false});canvas.addEventListener('pointercancel',()=>dragging=false);
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.35,Math.min(2.8,zoom*Math.exp(-e.deltaY*.001)))},{passive:false});
+function toggle(){paused=!paused;document.getElementById('toggle').textContent=paused?'Resume':'Pause'}
+document.getElementById('toggle').onclick=toggle;
+document.getElementById('reset').onclick=()=>{yaw=0;pitch=-.18;zoom=1;cameraPosition=0;controls.camera.value='0';document.getElementById('cameraValue').textContent='0.00';controls.flySpeed.value='0';document.getElementById('flySpeedValue').textContent='0.00';startDepthInput.value='-16';endDepthInput.value='16'};
+document.getElementById('regenerate').onclick=makeCloud;controls.count.addEventListener('change',makeCloud);
+const exportButton=document.getElementById('export'),webmButton=document.getElementById('exportWebm'),exportStatus=document.getElementById('exportStatus'),durationInput=document.getElementById('duration'),formatInput=document.getElementById('format');
+let recording=false;
+function recordVideo(format){
+  if(recording)return;
+  const duration=Math.round(Number(durationInput.value));
+  if(!Number.isFinite(duration)||duration<1||duration>600){exportStatus.textContent='Enter a duration between 1 and 600 seconds.';return}
+  durationInput.value=duration;
+  if(!HTMLCanvasElement.prototype.captureStream||!window.MediaRecorder){exportStatus.textContent='Video recording is not supported in this browser.';return}
+  const candidates=format==='mp4'
+    ?['video/mp4;codecs="avc1.42E01E"','video/mp4;codecs=avc1','video/mp4']
+    :['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+  const mime=candidates.find(type=>MediaRecorder.isTypeSupported(type));
+  if(!mime){exportStatus.textContent=format==='mp4'?'This browser cannot record MP4 directly. Try the WebM button, or open this page in a browser with MP4 recording support.':'WebM recording is not supported in this browser.';return}
+  const videoSize=formatInput.value==='landscape'?{w:1920,h:1080,name:'standard'}:{w:1080,h:1920,name:'shorts'};
+  recordingCanvas=document.createElement('canvas');recordingCanvas.width=videoSize.w;recordingCanvas.height=videoSize.h;
+  recordingContext=recordingCanvas.getContext('2d',{alpha:false});
+  drawScene(recordingContext,videoSize.w,videoSize.h);
+  const stream=recordingCanvas.captureStream(30),chunks=[];
+  let recorder;
+  try{recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:5000000})}
+  catch(err){stream.getTracks().forEach(track=>track.stop());recordingCanvas=recordingContext=null;exportStatus.textContent='Could not start recording: '+err.message;return}
+  const wasPaused=paused;
+  if(paused){paused=false;document.getElementById('toggle').textContent='Pause'}
+  recording=true;exportButton.disabled=webmButton.disabled=durationInput.disabled=formatInput.disabled=true;
+  exportButton.textContent=format==='mp4'?'Recording MP4…':'Export MP4';
+  webmButton.textContent=format==='webm'?'Recording WebM…':'Export WebM';
+  exportStatus.textContent=`Recording ${duration} seconds…`;
+  let stopTimer,failed=false;
+  recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
+  recorder.onerror=()=>{failed=true;exportStatus.textContent='Recording failed.'};
+  recorder.onstop=()=>{
+    clearTimeout(stopTimer);stream.getTracks().forEach(track=>track.stop());recordingCanvas=recordingContext=null;
+    if(wasPaused){paused=true;document.getElementById('toggle').textContent='Resume'}
+    recording=false;exportButton.disabled=webmButton.disabled=durationInput.disabled=formatInput.disabled=false;
+    exportButton.textContent='Export MP4';webmButton.textContent='Export WebM';
+    if(failed)return;
+    if(!chunks.length){exportStatus.textContent='No video data was captured.';return}
+    const extension=format==='mp4'?'mp4':'webm';
+    const blob=new Blob(chunks,{type:mime}),url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;link.download=`rotating-point-cloud-${videoSize.name}-${videoSize.w}x${videoSize.h}-${duration}s.`+extension;
+    document.body.appendChild(link);link.click();link.remove();
+    exportStatus.textContent='Video saved as '+extension.toUpperCase()+'.';
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  };
+  try{recorder.start(100);stopTimer=setTimeout(()=>{if(recorder.state==='recording')recorder.stop()},duration*1000)}
+  catch(err){stream.getTracks().forEach(track=>track.stop());if(wasPaused){paused=true;document.getElementById('toggle').textContent='Resume'}recording=false;exportButton.disabled=webmButton.disabled=durationInput.disabled=formatInput.disabled=false;exportButton.textContent='Export MP4';webmButton.textContent='Export WebM';recordingCanvas=recordingContext=null;exportStatus.textContent='Recording failed: '+err.message}
+}
+exportButton.addEventListener('click',()=>recordVideo('mp4'));
+webmButton.addEventListener('click',()=>recordVideo('webm'));
+window.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();toggle()}});
+window.addEventListener('resize',resize);resize();makeCloud();requestAnimationFrame(render);
+})();
+</script>
+</body></html>
