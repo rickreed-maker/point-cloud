@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rotating 3D Point Cloud</title>
 <style>
-:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#080d18;color:#e9f1ff;font:14px system-ui,sans-serif;overflow:hidden}canvas{display:block;width:100vw;height:100vh;cursor:grab}canvas:active{cursor:grabbing}.panel{position:fixed;top:16px;left:16px;width:min(300px,calc(100vw - 32px));padding:17px 18px;background:#111c30e8;border:1px solid #34445c;border-radius:14px;backdrop-filter:blur(12px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;transition:opacity .2s ease,transform .2s ease;z-index:2}.panel.hidden{opacity:0;transform:translateY(-12px);pointer-events:none}h1{font-size:17px;margin:0 0 5px}.sub{color:#9cb1cb;font-size:12px;margin-bottom:16px}.control{display:flex;justify-content:space-between;align-items:center;margin:13px 0 5px}.value{color:#8fe7ff;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#65cfff}button{border:1px solid #4b6781;background:#1c344a;color:white;border-radius:7px;padding:8px 12px;cursor:pointer}button:hover{background:#284d67}.buttons{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}.status{font-size:12px;color:#8fe7ff;margin-top:10px;min-height:16px}button:disabled{opacity:.55;cursor:wait}select{max-width:175px;background:#1c344a;color:#fff;border:1px solid #4b6781;border-radius:7px;padding:7px;font:inherit}input[type=number]{width:85px;background:#1c344a;color:#fff;border:1px solid #4b6781;border-radius:7px;padding:7px;font:inherit}.hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);white-space:nowrap;color:#9cb1cb;font-size:12px;pointer-events:none}@media(max-width:520px){.panel{top:10px;left:10px;width:245px;padding:12px}.hint{font-size:11px}}
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#080d18;color:#e9f1ff;font:14px system-ui,sans-serif;overflow:hidden}canvas{display:block;width:100vw;height:100vh;cursor:grab}canvas:active{cursor:grabbing}.panel{position:fixed;top:16px;left:16px;width:min(300px,calc(100vw - 32px));padding:17px 18px;background:#111c30e8;border:1px solid #34445c;border-radius:14px;backdrop-filter:blur(12px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;transition:opacity .2s ease,transform .2s ease;z-index:2}.panel.hidden{opacity:0;transform:translateY(-12px);pointer-events:none}h1{font-size:17px;margin:0 0 5px}.sub{color:#9cb1cb;font-size:12px;margin-bottom:16px}.control{display:flex;justify-content:space-between;align-items:center;margin:13px 0 5px}.value{color:#8fe7ff;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#65cfff}button{border:1px solid #4b6781;background:#1c344a;color:white;border-radius:7px;padding:8px 12px;cursor:pointer}button:hover{background:#284d67}.buttons{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}.status{font-size:12px;color:#8fe7ff;margin-top:10px;min-height:16px}button:disabled{opacity:.55;cursor:wait}select{max-width:175px;background:#1c344a;color:#fff;border:1px solid #4b6781;border-radius:7px;padding:7px;font:inherit}input[type=number]{width:85px;background:#1c344a;color:#fff;border:1px solid #4b6781;border-radius:7px;padding:7px;font:inherit}.preset-name{width:100%;background:#1c344a;color:#fff;border:1px solid #4b6781;border-radius:7px;padding:9px;font:inherit}.preset-section{margin:16px 0;padding:12px;border:1px solid #34445c;border-radius:10px}.preset-section h2{font-size:14px;margin:0 0 8px}.preset-section select{width:100%;max-width:none}.preset-section .buttons{margin-top:9px}.hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);white-space:nowrap;color:#9cb1cb;font-size:12px;pointer-events:none}@media(max-width:520px){.panel{top:10px;left:10px;width:245px;padding:12px}.hint{font-size:11px}}
 </style>
 </head>
 <body>
@@ -25,6 +25,13 @@
 <div class="control"><label for="size">Point size</label><span class="value" id="sizeValue"></span></div><input id="size" type="range" min="0.5" max="4" step="0.1" value="1.7">
 <div class="control"><label for="format">YouTube video size</label><select id="format"><option value="shorts">Shorts · 1080 × 1920</option><option value="landscape">Standard · 1920 × 1080</option></select></div>
 <div class="control"><label for="duration">Video duration (seconds)</label><input id="duration" type="number" min="1" max="600" step="1" value="10"></div>
+<div class="preset-section"><h2>Saved settings &amp; presets</h2>
+<label for="presetName">Preset name</label><input class="preset-name" id="presetName" type="text" maxlength="60" placeholder="e.g. Waving Ocean" autocomplete="off">
+<div class="buttons"><button id="savePreset">Save preset</button></div>
+<div class="control"><label for="presetSelect">Load preset</label></div><select id="presetSelect"><option value="">Choose a saved preset…</option></select>
+<div class="buttons"><button id="loadPreset">Load</button><button id="deletePreset">Delete</button></div>
+<div class="buttons"><button id="exportPresets">Export JSON</button><button id="importPresets">Import JSON</button><input type="file" id="importFile" accept=".json,application/json" hidden></div>
+<div class="status" id="presetStatus" role="status" aria-live="polite">Settings save automatically on this device.</div></div>
 <div class="buttons"><button id="toggle">Pause</button><button id="reset">Reset view</button><button id="regenerate">New cloud</button><button id="export">Export MP4</button><button id="exportWebm">Export WebM</button></div><div class="status" id="exportStatus" role="status" aria-live="polite"></div></div>
 <div class="hint">Tap to hide/show controls · Drag to orbit · Scroll to zoom · Camera + = forward</div>
 <script>
@@ -163,7 +170,79 @@ function recordVideo(format){
 exportButton.addEventListener('click',()=>recordVideo('mp4'));
 webmButton.addEventListener('click',()=>recordVideo('webm'));
 window.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();toggle()}});
-window.addEventListener('resize',resize);resize();makeCloud();requestAnimationFrame(render);
+// Persist the editable configuration on this device; never upload it to a server.
+const SETTINGS_KEY='point-cloud-settings-v1',PRESETS_KEY='point-cloud-presets-v1';
+const settingIds=['structure','animatePoints','waveAmplitude','waveFrequency','waveSpeed','count','speed','perspective','camera','startDepth','endDepth','flySpeed','size','format','duration'];
+const presetName=document.getElementById('presetName'),presetSelect=document.getElementById('presetSelect'),presetStatus=document.getElementById('presetStatus');
+const storedValue=id=>{const el=document.getElementById(id);return el.type==='checkbox'?el.checked:el.value};
+function snapshot(){const values={};for(const id of settingIds)values[id]=storedValue(id);values.camera=Number(cameraPosition.toFixed(2));return {...values,yaw,pitch,zoom,paused};}
+function safeParse(key,fallback){try{const value=JSON.parse(localStorage.getItem(key));return value&&typeof value==='object'&&!Array.isArray(value)?value:fallback}catch{return fallback}}
+let presets=safeParse(PRESETS_KEY,{}),savingSuspended=false,saveTimer=null;
+function saveCurrent(){if(savingSuspended)return;try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(snapshot()))}catch{presetStatus.textContent='Could not save settings: browser storage is unavailable.'}}
+function scheduleSave(){if(savingSuspended)return;clearTimeout(saveTimer);saveTimer=setTimeout(saveCurrent,250)}
+function restore(settings){
+ if(!settings||typeof settings!=='object')return;
+ savingSuspended=true;
+ for(const id of settingIds){const el=document.getElementById(id),value=settings[id];if(value===undefined||value===null)continue;
+  if(el.type==='checkbox'){el.checked=value===true;continue}
+  if(el.type==='range'||el.type==='number'){
+   const n=Number(value);if(!Number.isFinite(n))continue;
+   el.value=String(Math.min(Number(el.max),Math.max(Number(el.min),n)));
+  }else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===value))el.value=value}
+ }
+ updateDepthBounds('start');
+ const [a,b]=getDepthBounds();cameraPosition=Math.max(a,Math.min(b,Number(controls.camera.value)));
+ controls.camera.value=cameraPosition.toFixed(2);
+ for(const id of ['count','speed','perspective','size','camera','flySpeed','waveAmplitude','waveFrequency','waveSpeed'])document.getElementById(id).dispatchEvent(new Event('input'));
+ if(Number.isFinite(settings.yaw))yaw=settings.yaw;
+ if(Number.isFinite(settings.pitch))pitch=Math.max(-Math.PI/2,Math.min(Math.PI/2,settings.pitch));
+ if(Number.isFinite(settings.zoom))zoom=Math.max(.35,Math.min(2.8,settings.zoom));
+ if(typeof settings.paused==='boolean'){paused=settings.paused;document.getElementById('toggle').textContent=paused?'Resume':'Pause'}
+ makeCloud();savingSuspended=false;saveCurrent();
+}
+function refreshPresets(selected=''){
+ presetSelect.replaceChildren(new Option('Choose a saved preset…',''));
+ for(const name of Object.keys(presets).sort((a,b)=>a.localeCompare(b)))presetSelect.add(new Option(name,name));
+ if(selected&&Object.hasOwn(presets,selected))presetSelect.value=selected;
+}
+function savePresets(){try{localStorage.setItem(PRESETS_KEY,JSON.stringify(presets));return true}catch{presetStatus.textContent='Unable to save presets on this device.';return false}}
+document.getElementById('savePreset').onclick=()=>{
+ const name=presetName.value.trim();if(!name){presetStatus.textContent='Enter a name for this preset.';return}
+ if(Object.hasOwn(presets,name)&&!confirm('Replace preset "'+name+'"?'))return;
+ presets[name]=snapshot();if(savePresets()){refreshPresets(name);presetStatus.textContent='Saved preset: '+name}
+};
+document.getElementById('loadPreset').onclick=()=>{
+ const name=presetSelect.value;if(!name||!Object.hasOwn(presets,name)){presetStatus.textContent='Select a preset first.';return}
+ restore(presets[name]);presetName.value=name;presetStatus.textContent='Loaded preset: '+name;
+};
+document.getElementById('deletePreset').onclick=()=>{
+ const name=presetSelect.value;if(!name||!Object.hasOwn(presets,name)){presetStatus.textContent='Select a preset to delete.';return}
+ if(!confirm('Delete preset "'+name+'"?'))return;
+ delete presets[name];savePresets();refreshPresets();presetStatus.textContent='Deleted preset: '+name;
+};
+document.getElementById('exportPresets').onclick=()=>{
+ const blob=new Blob([JSON.stringify({app:'point-cloud',version:1,settings:snapshot(),presets},null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download='point-cloud-presets.json';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);presetStatus.textContent='Exported settings and presets.';
+};
+document.getElementById('importPresets').onclick=()=>document.getElementById('importFile').click();
+document.getElementById('importFile').addEventListener('change',async e=>{
+ const file=e.target.files[0];if(!file)return;
+ try{if(file.size>1000000)throw Error('File too large');const data=JSON.parse(await file.text());
+ if(data.app!=='point-cloud'||data.version!==1||!data.presets||typeof data.presets!=='object'||Array.isArray(data.presets))throw Error('Not a Point Cloud preset backup');
+ const imported=Object.entries(data.presets).filter(([name,val])=>name.length<=60&&val&&typeof val==='object'&&!Array.isArray(val));
+ const conflicts=imported.filter(([name])=>Object.hasOwn(presets,name));
+ if(conflicts.length&&!confirm(conflicts.length+' preset name(s) already exist. Replace those presets?')){presetStatus.textContent='Import canceled.';return}
+ for(const [name,val] of imported)presets[name]=val;
+ if(!savePresets())return;refreshPresets();presetStatus.textContent='Imported '+imported.length+' presets. Current settings unchanged.';
+ }catch(err){presetStatus.textContent='Import failed: '+err.message}finally{e.target.value=''}
+});
+for(const id of settingIds){const el=document.getElementById(id);el.addEventListener('input',scheduleSave);el.addEventListener('change',scheduleSave)}
+for(const id of ['toggle','reset','regenerate'])document.getElementById(id).addEventListener('click',scheduleSave);
+canvas.addEventListener('pointerup',scheduleSave);canvas.addEventListener('wheel',scheduleSave);
+window.addEventListener('pagehide',saveCurrent);
+// Moving camera values are saved periodically without writing on every animation frame.
+let lastAutosave=0;setInterval(()=>{if(!savingSuspended&&!recording)saveCurrent()},5000);
+window.addEventListener('resize',resize);resize();refreshPresets();restore(safeParse(SETTINGS_KEY,{}));makeCloud();requestAnimationFrame(render);
 })();
 </script>
 </body></html>
