@@ -10,8 +10,11 @@
 <body>
 <canvas id="scene"></canvas>
 <div class="panel" id="panel"><h1>3D Point Cloud</h1><div class="sub">Perspective projection · Y-axis rotation</div>
-<div class="control"><label for="structure">Point structure</label><select id="structure"><option value="sphere">Sphere</option><option value="shell">Sphere shell</option><option value="grid">Grid (XZ plane)</option><option value="stars">Nearby stars (HYG)</option></select></div>
-<div id="starOptions" hidden><div class="control"><label for="starRadius">Radius (light-years)</label><span id="starRadiusValue" class="value">50</span></div><input id="starRadius" type="range" min="5" max="50" step="1" value="50"><div class="control"><label for="starColors">Stellar colors</label><input id="starColors" type="checkbox" checked></div><div class="control"><label for="starLum">Luminosity sizing</label><input id="starLum" type="checkbox" checked></div><div class="control"><label for="starLabels">Named star labels</label><input id="starLabels" type="checkbox"></div><div class="control"><label for="starSun">Highlight Sun</label><input id="starSun" type="checkbox" checked></div><div class="sub" id="starCount"></div><div class="sub">HYG v4.2 (David Nash) · CC BY-SA 4.0 · heliocentric coordinates · radius filter, fixed scale of 50 ly.</div></div><div class="control"><label for="animatePoints">Vary positions over time</label><input id="animatePoints" type="checkbox" style="width:20px;height:20px;accent-color:#65cfff"></div>
+<div class="control"><label for="structure">Point structure</label><select id="structure"><option value="sphere">Ball</option><option value="shell">Sphere</option><option value="grid">Grid (XZ plane)</option><option value="stars">Nearby stars (HYG)</option></select></div>
+<div id="gravityOptions"><div class="control"><label for="gravityEnabled">Mutual gravity</label><input id="gravityEnabled" type="checkbox"></div>
+<div class="control"><label for="gravityStrength">Gravity strength</label><span class="value" id="gravityStrengthValue">1.00</span></div><input id="gravityStrength" type="range" min="0" max="5" step="0.05" value="1">
+<div class="control"><label for="gravityVelocity">Initial motion</label><span class="value" id="gravityVelocityValue">0.00</span></div><input id="gravityVelocity" type="range" min="0" max="1" step="0.05" value="0">
+<div class="buttons"><button id="restartGravity">Restart gravity</button></div><div class="sub">Equal masses · softened gravity · initial motion applies on restart. Gravity uses up to 1000 points for performance.</div></div><div id="starOptions" hidden><div class="control"><label for="starRadius">Radius (light-years)</label><span id="starRadiusValue" class="value">50</span></div><input id="starRadius" type="range" min="5" max="50" step="1" value="50"><div class="control"><label for="starColors">Stellar colors</label><input id="starColors" type="checkbox" checked></div><div class="control"><label for="starLum">Luminosity sizing</label><input id="starLum" type="checkbox" checked></div><div class="control"><label for="starLabels">Named star labels</label><input id="starLabels" type="checkbox"></div><div class="control"><label for="starSun">Highlight Sun</label><input id="starSun" type="checkbox" checked></div><div class="sub" id="starCount"></div><div class="sub">HYG v4.2 (David Nash) · CC BY-SA 4.0 · heliocentric coordinates · radius filter, fixed scale of 50 ly.</div></div><div class="control"><label for="animatePoints">Vary positions over time</label><input id="animatePoints" type="checkbox" style="width:20px;height:20px;accent-color:#65cfff"></div>
 <div class="control"><label for="waveAmplitude">Wave height</label><span class="value" id="waveAmplitudeValue">0.35</span></div><input id="waveAmplitude" type="range" min="0" max="1.5" step="0.05" value="0.35">
 <div class="control"><label for="waveFrequency">Wave frequency</label><span class="value" id="waveFrequencyValue">3.0</span></div><input id="waveFrequency" type="range" min="0.5" max="10" step="0.1" value="3">
 <div class="control"><label for="waveSpeed">Wave speed</label><span class="value" id="waveSpeedValue">1.0</span></div><input id="waveSpeed" type="range" min="0" max="5" step="0.1" value="1">
@@ -61,9 +64,32 @@ const starRadius=document.getElementById("starRadius");
 function starColor(ci){const stops=[[-.4,[155,180,255]],[0,[205,220,255]],[.4,[255,249,239]],[.65,[255,234,185]],[1,[255,199,133]],[1.6,[255,145,95]],[2.5,[255,105,75]]];for(let i=1;i<stops.length;i++){if(ci<=stops[i][0]){const a=stops[i-1],b=stops[i],t=Math.max(0,(ci-a[0])/(b[0]-a[0]));return a[1].map((v,j)=>Math.round(v+(b[1][j]-v)*t)).join(",")}}return "255,105,75";}
 let waveTime=0;
 let points=[],yaw=0,pitch=-0.18,zoom=1,paused=false,width=0,height=0,dpr=1,last=0,cameraPosition=0;
+const gravityEnabled=document.getElementById('gravityEnabled'),gravityStrength=document.getElementById('gravityStrength'),gravityVelocity=document.getElementById('gravityVelocity');
+const gravitySupported=()=>['sphere','shell'].includes(structureInput.value);
+const gravityActive=()=>gravitySupported()&&gravityEnabled.checked;
+let gravityClock=0,gravityInitial=[];
+for(const el of [gravityStrength,gravityVelocity])el.addEventListener('input',()=>document.getElementById(el.id+'Value').textContent=Number(el.value).toFixed(2));
+function initGravity(){
+ gravityClock=0;gravityInitial=points.map(p=>({...p}));
+ const v=+gravityVelocity.value;let vx=0,vy=0,vz=0;
+ for(const p of points){p.vx=(Math.random()*2-1)*v;p.vy=(Math.random()*2-1)*v;p.vz=(Math.random()*2-1)*v;vx+=p.vx;vy+=p.vy;vz+=p.vz;}
+ for(const p of points){p.vx-=vx/points.length;p.vy-=vy/points.length;p.vz-=vz/points.length;}
+}
+function gravityStep(dt){
+ if(!gravityActive())return;
+ gravityClock+=dt;const h=1/30,n=points.length;
+ while(gravityClock>=h){gravityClock-=h;const g=+gravityStrength.value/n;
+ for(let i=0;i<n;i++){const a=points[i];for(let j=i+1;j<n;j++){const b=points[j],x=b.x-a.x,y=b.y-a.y,z=b.z-a.z,r2=x*x+y*y+z*z+.0064,k=g*h/(r2*Math.sqrt(r2));a.vx+=x*k;a.vy+=y*k;a.vz+=z*k;b.vx-=x*k;b.vy-=y*k;b.vz-=z*k;}}
+ for(const p of points){p.x+=p.vx*h;p.y+=p.vy*h;p.z+=p.vz*h;}
+ }
+}
+gravityEnabled.addEventListener('change',makeCloud);
+document.getElementById('restartGravity').onclick=()=>{if(!gravityActive())return;points=gravityInitial.map(p=>({...p}));initGravity();};
 function makeCloud(){
- points=[];const n=+controls.count.value;
- const stars=structureInput.value==='stars';document.getElementById('starOptions').hidden=!stars;controls.count.disabled=stars;animatePointsInput.disabled=stars;document.getElementById('regenerate').disabled=stars;
+ points=[];const n=gravityActive()?Math.min(1000,+controls.count.value):+controls.count.value;
+ document.getElementById("gravityOptions").hidden=!gravitySupported();
+ document.getElementById("countValue").textContent=gravityActive()&&+controls.count.value>1000?"1,000 (gravity limit)":Number(controls.count.value).toLocaleString();
+ const stars=structureInput.value==='stars';document.getElementById('starOptions').hidden=!stars;controls.count.disabled=stars;animatePointsInput.disabled=stars||gravityActive();document.getElementById('regenerate').disabled=stars;
  document.getElementById('starRadiusValue').textContent=starRadius.value;
  if(stars){points=starData.filter(a=>a[3]<=+starRadius.value).map(a=>({x:a[0]/50,y:-a[2]/50,z:a[1]/50,h:.5,name:a[4],rgb:starColor(a[5]),lum:a[6],sun:a[7]===0}));document.getElementById('starCount').textContent=points.length+' catalog entries (including Sun)';return;}
  if(structureInput.value==='grid'){
@@ -79,6 +105,7 @@ function makeCloud(){
      points.push({x:r*s*Math.cos(a),y:r*y,z:r*s*Math.sin(a),h:Math.random()});
    }
  }
+ if(gravityActive())initGravity();
 }
 structureInput.addEventListener('change',makeCloud);starRadius.addEventListener('input',makeCloud);
 function resize(){dpr=Math.min(window.devicePixelRatio||1,2);width=innerWidth;height=innerHeight;canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);ctx.setTransform(dpr,0,0,dpr,0,0)}
@@ -90,7 +117,7 @@ const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
 const projected=[];
 for(const p of points){
  let py=p.y;
- if(animatePointsInput.checked&&structureInput.value!=='stars'){
+ if(animatePointsInput.checked&&structureInput.value!=='stars'&&!gravityActive()){
    const amp=+document.getElementById('waveAmplitude').value;
    const freq=+document.getElementById('waveFrequency').value;
    if(structureInput.value==='grid')py+=amp*Math.sin(freq*p.x-waveTime)*Math.cos(freq*p.z-waveTime*.7);
@@ -100,7 +127,7 @@ for(const p of points){
 projected.sort((a,b)=>a.depth-b.depth);
 for(const p of projected){if(structureInput.value==='stars'){const a=p.star,highlight=a.sun&&document.getElementById('starSun').checked;const factor=document.getElementById('starLum').checked?Math.max(.45,Math.min(3,Math.pow(Math.max(a.lum,.00001),.15))):1;const r=Math.min(40,Math.max(.45,+controls.size.value*p.scale*factor*(highlight?2:1)));target.beginPath();target.arc(p.x,p.y,r,0,Math.PI*2);target.fillStyle='rgb('+(highlight?'255,225,90':document.getElementById('starColors').checked?a.rgb:'230,240,255')+')';target.fill();if(highlight){target.beginPath();target.arc(p.x,p.y,r+4,0,Math.PI*2);target.strokeStyle='#ffe15a';target.stroke()}if((highlight||document.getElementById('starLabels').checked)&&a.name){target.font=Math.max(11,Math.min(w,h)*.012)+'px system-ui';target.fillStyle='#e9f1ff';target.fillText(a.name,p.x+r+5,p.y-4)}continue;}const r=Math.max(.3,+controls.size.value*p.scale);const alpha=Math.min(.95,Math.max(.23,.58+p.depth*.27));target.beginPath();target.arc(p.x,p.y,r,0,Math.PI*2);target.fillStyle=`rgba(${Math.round(110+75*p.h)},${Math.round(190+55*p.h)},255,${alpha})`;target.fill()}
 }
-function render(t){const dt=Math.min((t-last)/1000||0,0.05);last=t;if(!paused){waveTime+=dt*Number(document.getElementById('waveSpeed').value);yaw+=Number(controls.speed.value)*Math.PI/180*dt;
+function render(t){const dt=Math.min((t-last)/1000||0,0.05);last=t;if(!paused){gravityStep(dt);waveTime+=dt*Number(document.getElementById('waveSpeed').value);yaw+=Number(controls.speed.value)*Math.PI/180*dt;
 const fly=Number(controls.flySpeed.value);if(fly!==0){
 // Smoothly decelerate as the camera approaches the selected endpoint.
 const [startDepth,endDepth]=getDepthBounds();
@@ -178,7 +205,7 @@ webmButton.addEventListener('click',()=>recordVideo('webm'));
 window.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'){e.preventDefault();toggle()}});
 // Persist the editable configuration on this device; never upload it to a server.
 const SETTINGS_KEY='point-cloud-settings-v1',PRESETS_KEY='point-cloud-presets-v1';
-const settingIds=['starRadius','starColors','starLum','starLabels','starSun','structure','animatePoints','waveAmplitude','waveFrequency','waveSpeed','count','speed','perspective','camera','startDepth','endDepth','flySpeed','size','format','duration'];
+const settingIds=['gravityEnabled','gravityStrength','gravityVelocity','starRadius','starColors','starLum','starLabels','starSun','structure','animatePoints','waveAmplitude','waveFrequency','waveSpeed','count','speed','perspective','camera','startDepth','endDepth','flySpeed','size','format','duration'];
 const presetName=document.getElementById('presetName'),presetSelect=document.getElementById('presetSelect'),presetStatus=document.getElementById('presetStatus');
 const storedValue=id=>{const el=document.getElementById(id);return el.type==='checkbox'?el.checked:el.value};
 function snapshot(){const values={};for(const id of settingIds)values[id]=storedValue(id);values.camera=Number(cameraPosition.toFixed(2));return {...values,yaw,pitch,zoom,paused};}
@@ -189,6 +216,7 @@ function scheduleSave(){if(savingSuspended)return;clearTimeout(saveTimer);saveTi
 function restore(settings){
  if(!settings||typeof settings!=='object')return;
  savingSuspended=true;
+ gravityEnabled.checked=false;gravityStrength.value='1';gravityVelocity.value='0';
  for(const id of settingIds){const el=document.getElementById(id),value=settings[id];if(value===undefined||value===null)continue;
   if(el.type==='checkbox'){el.checked=value===true;continue}
   if(el.type==='range'||el.type==='number'){
@@ -199,7 +227,7 @@ function restore(settings){
  updateDepthBounds('start');
  const [a,b]=getDepthBounds();cameraPosition=Math.max(a,Math.min(b,Number(controls.camera.value)));
  controls.camera.value=cameraPosition.toFixed(2);
- for(const id of ['count','speed','perspective','size','camera','flySpeed','waveAmplitude','waveFrequency','waveSpeed'])document.getElementById(id).dispatchEvent(new Event('input'));
+ for(const id of ['count','speed','perspective','size','camera','flySpeed','waveAmplitude','waveFrequency','waveSpeed','gravityStrength','gravityVelocity'])document.getElementById(id).dispatchEvent(new Event('input'));
  if(Number.isFinite(settings.yaw))yaw=settings.yaw;
  if(Number.isFinite(settings.pitch))pitch=Math.max(-Math.PI/2,Math.min(Math.PI/2,settings.pitch));
  if(Number.isFinite(settings.zoom))zoom=Math.max(.35,Math.min(2.8,settings.zoom));
