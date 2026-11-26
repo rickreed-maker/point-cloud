@@ -5,37 +5,39 @@
 <title>Rotating 3D Point Cloud</title>
 <style>
 :root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#080d18;color:#e9f1ff;font:14px system-ui,sans-serif;overflow:hidden}canvas{display:block;width:100vw;height:100vh;cursor:grab}canvas:active{cursor:grabbing}.panel{position:fixed;top:16px;left:16px;width:min(300px,calc(100vw - 32px));padding:17px 18px;background:#111c30e8;border:1px solid #34445c;border-radius:14px;backdrop-filter:blur(12px);max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contain;transition:opacity .2s ease,transform .2s ease;z-index:2}.panel.hidden{opacity:0;transform:translateY(-12px);pointer-events:none}h1{font-size:17px;margin:0 0 5px}.sub{color:#9cb1cb;font-size:12px;margin-bottom:16px}.control{display:flex;justify-content:space-between;align-items:center;margin:13px 0 5px}.value{color:#8fe7ff;font-variant-numeric:tabular-nums}input[type=range]{width:100%;accent-color:#65cfff}button{border:1px solid #4b6781;background:#1c344a;color:white;border-radius:7px;padding:8px 12px;cursor:pointer}button:hover{background:#284d67}.buttons{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}.status{font-size:12px;color:#8fe7ff;margin-top:10px;min-height:16px}button:disabled{opacity:.55;cursor:wait}select{max-width:175px;background:#1c344a;color:#fff;border:1px solid #4b6781;border-radius:7px;padding:7px;font:inherit}input[type=number]{width:85px;background:#1c344a;color:#fff;border:1px solid #4b6781;border-radius:7px;padding:7px;font:inherit}.preset-name{width:100%;background:#1c344a;color:#fff;border:1px solid #4b6781;border-radius:7px;padding:9px;font:inherit}.preset-section{margin:16px 0;padding:12px;border:1px solid #34445c;border-radius:10px}.preset-section h2{font-size:14px;margin:0 0 8px}.preset-section select{width:100%;max-width:none}.preset-section .buttons{margin-top:9px}.hint{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);white-space:nowrap;color:#9cb1cb;font-size:12px;pointer-events:none}@media(max-width:520px){.panel{top:10px;left:10px;width:245px;padding:12px}.hint{font-size:11px}}
+
+.panel{display:flex;flex-direction:column;overflow:hidden;max-height:calc(100dvh - 32px)}.panel-header,.export-footer{flex:none}.panel-scroll{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding-right:4px}.panel details{border-top:1px solid #34445c;padding:9px 0}.panel summary{cursor:pointer;font-weight:600;color:#d5e7fa;padding:4px 0}.panel details[open]{padding-bottom:13px}.export-footer{border-top:1px solid #34445c;padding-top:8px}.export-footer .buttons{margin-top:0}.export-footer button{flex:1;white-space:nowrap}.export-footer .status{overflow-wrap:anywhere}.preset-section{margin:0;padding:0;border:0}.panel [hidden]{display:none!important}@media(max-width:520px){.panel{max-height:calc(100dvh - 20px)}}
 </style>
 </head>
 <body>
 <canvas id="scene"></canvas>
-<div class="panel" id="panel"><h1>3D Point Cloud</h1><div class="sub">Perspective projection · Y-axis rotation</div>
+<div class="panel" id="panel"><div class="panel-header"><h1>3D Point Cloud</h1><div class="sub">Perspective projection · Y-axis rotation</div></div><div class="panel-scroll"><details open><summary>Point structure</summary>
 <div class="control"><label for="structure">Point structure</label><select id="structure"><option value="sphere">Ball</option><option value="shell">Sphere</option><option value="grid">Grid (XZ plane)</option><option value="stars">Nearby stars (HYG)</option></select></div>
-<div id="gravityOptions"><div class="control"><label for="gravityEnabled">Mutual gravity</label><input id="gravityEnabled" type="checkbox"></div>
+<div class="control"><label for="count">Points</label><span class="value" id="countValue"></span></div><input id="count" type="range" min="200" max="5000" step="100" value="1800">
+</details><div id="gravityOptions"><details><summary>Gravity</summary><div class="control"><label for="gravityEnabled">Mutual gravity</label><input id="gravityEnabled" type="checkbox"></div>
 <div class="control"><label for="gravityStrength">Gravity strength</label><span class="value" id="gravityStrengthValue">1.00</span></div><input id="gravityStrength" type="range" min="0" max="5" step="0.05" value="1">
 <div class="control"><label for="gravityVelocity">Initial motion</label><span class="value" id="gravityVelocityValue">0.00</span></div><input id="gravityVelocity" type="range" min="0" max="1" step="0.05" value="0">
-<div class="buttons"><button id="restartGravity">Restart gravity</button></div><div class="sub">Equal masses · softened gravity · initial motion applies on restart. Gravity uses up to 1000 points for performance.</div></div><div id="starOptions" hidden><div class="control"><label for="starRadius">Radius (light-years)</label><span id="starRadiusValue" class="value">50</span></div><input id="starRadius" type="range" min="5" max="50" step="1" value="50"><div class="control"><label for="starColors">Stellar colors</label><input id="starColors" type="checkbox" checked></div><div class="control"><label for="starLum">Luminosity sizing</label><input id="starLum" type="checkbox" checked></div><div class="control"><label for="starLabels">Named star labels</label><input id="starLabels" type="checkbox"></div><div class="control"><label for="starSun">Highlight Sun</label><input id="starSun" type="checkbox" checked></div><div class="sub" id="starCount"></div><div class="sub">HYG v4.2 (David Nash) · CC BY-SA 4.0 · heliocentric coordinates · radius filter, fixed scale of 50 ly.</div></div><div class="control"><label for="animatePoints">Vary positions over time</label><input id="animatePoints" type="checkbox" style="width:20px;height:20px;accent-color:#65cfff"></div>
+<div class="buttons"><button id="restartGravity">Restart gravity</button></div><div class="sub">Equal masses · softened gravity · initial motion applies on restart. Gravity uses up to 1000 points for performance.</div></details></div><div id="starOptions" hidden><details><summary>Star settings</summary><div class="control"><label for="starRadius">Radius (light-years)</label><span id="starRadiusValue" class="value">50</span></div><input id="starRadius" type="range" min="5" max="50" step="1" value="50"><div class="control"><label for="starColors">Stellar colors</label><input id="starColors" type="checkbox" checked></div><div class="control"><label for="starLum">Luminosity sizing</label><input id="starLum" type="checkbox" checked></div><div class="control"><label for="starLabels">Named star labels</label><input id="starLabels" type="checkbox"></div><div class="control"><label for="starSun">Highlight Sun</label><input id="starSun" type="checkbox" checked></div><div class="sub" id="starCount"></div><div class="sub">HYG v4.2 (David Nash) · CC BY-SA 4.0 · heliocentric coordinates · radius filter, fixed scale of 50 ly.</div></details></div><details><summary>Wave animation</summary><div class="control"><label for="animatePoints">Vary positions over time</label><input id="animatePoints" type="checkbox" style="width:20px;height:20px;accent-color:#65cfff"></div>
 <div class="control"><label for="waveAmplitude">Wave height</label><span class="value" id="waveAmplitudeValue">0.35</span></div><input id="waveAmplitude" type="range" min="0" max="1.5" step="0.05" value="0.35">
 <div class="control"><label for="waveFrequency">Wave frequency</label><span class="value" id="waveFrequencyValue">3.0</span></div><input id="waveFrequency" type="range" min="0.5" max="10" step="0.1" value="3">
 <div class="control"><label for="waveSpeed">Wave speed</label><span class="value" id="waveSpeedValue">1.0</span></div><input id="waveSpeed" type="range" min="0" max="5" step="0.1" value="1">
-<div class="control"><label for="count">Points</label><span class="value" id="countValue"></span></div><input id="count" type="range" min="200" max="5000" step="100" value="1800">
-<div class="control"><label for="speed">Rotation speed</label><span class="value" id="speedValue"></span></div><input id="speed" type="range" min="-120" max="120" step="1" value="25">
+</details><details><summary>Camera &amp; rotation</summary><div class="control"><label for="speed">Rotation speed</label><span class="value" id="speedValue"></span></div><input id="speed" type="range" min="-120" max="120" step="1" value="25">
 <div class="control"><label for="perspective">Perspective</label><span class="value" id="perspectiveValue"></span></div><input id="perspective" type="range" min="2" max="10" step="0.1" value="4.5">
 <div class="control"><label for="camera">Camera forward / back</label><span class="value" id="cameraValue"></span></div><input id="camera" type="range" min="-16" max="16" step="0.01" value="0">
-<div class="control"><label for="startDepth">Start depth</label><input id="startDepth" type="number" min="-16" max="16" step="0.1" value="-16"></div>
+<div class="sub">Live camera: <span id="liveCamera">0.00</span></div><div class="control"><label for="startDepth">Start depth</label><input id="startDepth" type="number" min="-16" max="16" step="0.1" value="-16"></div>
 <div class="control"><label for="endDepth">End depth</label><input id="endDepth" type="number" min="-16" max="16" step="0.1" value="16"></div>
 <div class="control"><label for="flySpeed">Fly speed</label><span class="value" id="flySpeedValue"></span></div><input id="flySpeed" type="range" min="-1.5" max="1.5" step="0.05" value="0">
-<div class="control"><label for="size">Point size</label><span class="value" id="sizeValue"></span></div><input id="size" type="range" min="0.5" max="4" step="0.1" value="1.7">
-<div class="control"><label for="format">YouTube video size</label><select id="format"><option value="shorts">Shorts · 1080 × 1920</option><option value="landscape">Standard · 1920 × 1080</option></select></div>
+</details><details><summary>Appearance</summary><div class="control"><label for="size">Point size</label><span class="value" id="sizeValue"></span></div><input id="size" type="range" min="0.5" max="4" step="0.1" value="1.7">
+</details><details><summary>Video settings</summary><div class="control"><label for="format">YouTube video size</label><select id="format"><option value="shorts">Shorts · 1080 × 1920</option><option value="landscape">Standard · 1920 × 1080</option></select></div>
 <div class="control"><label for="duration">Video duration (seconds)</label><input id="duration" type="number" min="1" max="600" step="1" value="10"></div>
-<div class="preset-section"><h2>Saved settings &amp; presets</h2>
+</details><details><summary>Saved settings &amp; presets</summary><div class="preset-section">
 <label for="presetName">Preset name</label><input class="preset-name" id="presetName" type="text" maxlength="60" placeholder="e.g. Waving Ocean" autocomplete="off">
 <div class="buttons"><button id="savePreset">Save preset</button></div>
 <div class="control"><label for="presetSelect">Load preset</label></div><select id="presetSelect"><option value="">Choose a saved preset…</option></select>
 <div class="buttons"><button id="loadPreset">Load</button><button id="deletePreset">Delete</button></div>
 <div class="buttons"><button id="exportPresets">Export JSON</button><button id="importPresets">Import JSON</button><input type="file" id="importFile" accept=".json,application/json" hidden></div>
 <div class="status" id="presetStatus" role="status" aria-live="polite">Settings save automatically on this device.</div></div>
-<div class="buttons"><button id="toggle">Pause</button><button id="reset">Reset view</button><button id="regenerate">New cloud</button><button id="export">Export MP4</button><button id="exportWebm">Export WebM</button></div><div class="status" id="exportStatus" role="status" aria-live="polite"></div></div>
+</details><details><summary>Playback &amp; reset</summary><div class="buttons"><button id="toggle">Pause</button><button id="reset">Reset view</button><button id="regenerate">New cloud</button></div></details></div><div class="export-footer"><div class="buttons"><button id="export">Export MP4</button><button id="exportWebm">Export WebM</button></div><div class="status" id="exportStatus" role="status" aria-live="polite"></div></div></div>
 <div class="hint">Tap to hide/show controls · Drag to orbit · Scroll to zoom · Camera + = forward</div>
 <script>
 (()=>{
@@ -52,8 +54,8 @@ function updateDepthBounds(changed){
  if(a>b){if(changed==='start')b=a;else a=b;}
  startDepthInput.value=a;endDepthInput.value=b;
  cameraPosition=Math.max(a,Math.min(b,cameraPosition));
- controls.camera.value=cameraPosition.toFixed(2);
- document.getElementById('cameraValue').textContent=cameraPosition.toFixed(2);
+ controls.camera.value=Math.max(a,Math.min(b,Number(controls.camera.value))).toFixed(2);
+ document.getElementById('cameraValue').textContent=Number(controls.camera.value).toFixed(2);
 }
 startDepthInput.addEventListener('change',()=>updateDepthBounds('start'));
 endDepthInput.addEventListener('change',()=>updateDepthBounds('end'));
@@ -137,7 +139,8 @@ const ease=u*u*(3-2*u);
 const step=Math.abs(fly)*dt*ease;
 cameraPosition=Math.max(startDepth,Math.min(endDepth,cameraPosition+Math.sign(fly)*step));
 if(remaining<0.005)cameraPosition=limit;
-controls.camera.value=cameraPosition.toFixed(2);document.getElementById('cameraValue').textContent=cameraPosition.toFixed(2)}}
+} }
+document.getElementById("liveCamera").textContent=cameraPosition.toFixed(2);
 drawScene(ctx,width,height);
 if(recordingCanvas)drawScene(recordingContext,recordingCanvas.width,recordingCanvas.height);
 requestAnimationFrame(render)}
@@ -169,6 +172,8 @@ function recordVideo(format){
   const videoSize=formatInput.value==='landscape'?{w:1920,h:1080,name:'standard'}:{w:1080,h:1920,name:'shorts'};
   recordingCanvas=document.createElement('canvas');recordingCanvas.width=videoSize.w;recordingCanvas.height=videoSize.h;
   recordingContext=recordingCanvas.getContext('2d',{alpha:false});
+  const [a,b]=getDepthBounds();
+  cameraPosition=Math.max(a,Math.min(b,Number(controls.camera.value)));
   drawScene(recordingContext,videoSize.w,videoSize.h);
   const stream=recordingCanvas.captureStream(30),chunks=[];
   let recorder;
@@ -208,7 +213,7 @@ const SETTINGS_KEY='point-cloud-settings-v1',PRESETS_KEY='point-cloud-presets-v1
 const settingIds=['gravityEnabled','gravityStrength','gravityVelocity','starRadius','starColors','starLum','starLabels','starSun','structure','animatePoints','waveAmplitude','waveFrequency','waveSpeed','count','speed','perspective','camera','startDepth','endDepth','flySpeed','size','format','duration'];
 const presetName=document.getElementById('presetName'),presetSelect=document.getElementById('presetSelect'),presetStatus=document.getElementById('presetStatus');
 const storedValue=id=>{const el=document.getElementById(id);return el.type==='checkbox'?el.checked:el.value};
-function snapshot(){const values={};for(const id of settingIds)values[id]=storedValue(id);values.camera=Number(cameraPosition.toFixed(2));return {...values,yaw,pitch,zoom,paused};}
+function snapshot(){const values={};for(const id of settingIds)values[id]=storedValue(id);values.camera=Number(controls.camera.value);return {...values,yaw,pitch,zoom,paused};}
 function safeParse(key,fallback){try{const value=JSON.parse(localStorage.getItem(key));return value&&typeof value==='object'&&!Array.isArray(value)?value:fallback}catch{return fallback}}
 let presets=safeParse(PRESETS_KEY,{}),savingSuspended=false,saveTimer=null;
 function saveCurrent(){if(savingSuspended)return;try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(snapshot()))}catch{presetStatus.textContent='Could not save settings: browser storage is unavailable.'}}
